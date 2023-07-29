@@ -1,0 +1,7 @@
+# This file extends the docker-compose.yml with develop configurations/overrides. https://docs.docker.com/compose/compose-file/13-merge/
+# This file gets applied automatically when no --file parameter is provided
+version: "3.8"
+services:
+  restic:
+    # Add a name to easy identify
+    container_name: resticDev

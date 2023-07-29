@@ -1,0 +1,75 @@
+# This file serves as the base to build on top on.
+version: "3.8"
+services:
+  restic:
+    # Build using a Dockerfile
+    build:
+      dockerfile: Dockerfile
+
+    # https://www.baeldung.com/ops/docker-compose-restart-policies
+    restart: always
+
+    # https://docs.docker.com/storage/volumes/
+    # https://github.com/djmaze/resticker/#configuration-options
+    environment:
+      # A cron expression for when to run the backup
+      BACKUP_CRON: 0 30 3 * * *
+      # Set to "true" to execute a backup or prune job right on startup, in addition to the given cron expression.
+      RUN_ON_STARTUP: 1
+      # Location of the restic repository. You can use any target supported by restic. https://restic.readthedocs.io/en/stable/030_preparing_a_new_repo.html
+      RESTIC_REPOSITORY: ${RESTIC_REPOSITORY:?Missing environment variable see readme}
+      # Password for the restic repository.
+      RESTIC_PASSWORD: ${RESTIC_PASSWORD:?Missing environment variable see readme}
+      # https://restic.readthedocs.io/en/stable/030_preparing_a_new_repo.html#amazon-s3
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:?Missing environment variable see readme}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:?Missing environment variable see readme}
+      # Source directory to backup.
+      RESTIC_BACKUP_SOURCES: /mnt/volumes
+      # If specified restic backup is run with the given arguments.
+      RESTIC_BACKUP_ARGS: >-
+        --tag docker-volumes
+        --host docker
+        --verbose
+      # If specified restic forget is run with the given arguments after each backup or before every prune.
+      RESTIC_FORGET_ARGS: >-
+        --keep-last 30
+        --keep-daily 7
+        --keep-weekly 5
+        --keep-monthly 12
+      # Set your timezone for the correct cron execution time.
+      TZ: Europe/Berlin
+      # Email to send the notification to.
+      NOTIFY_TO: ${NOTIFY_TO:?Missing environment variable see readme}
+      # Email from which the notification is sent.
+      NOTIFY_FROM: ${NOTIFY_FROM:?Missing environment variable see readme}
+      # Server where to login for notify.
+      NOTIFY_SERVER: ${NOTIFY_SERVER:?Missing environment variable see readme}
+      # Server port to login for notify.
+      NOTIFY_PORT: ${NOTIFY_PORT:?Missing environment variable see readme}
+      # Server user to login for notify.
+      NOTIFY_USER: ${NOTIFY_USER:?Missing environment variable see readme}
+      # Server password to login for notify.
+      NOTIFY_PASSWORD: ${NOTIFY_PASSWORD:?Missing environment variable see readme}
+      # Commands will be executed after a fully successful backup run.
+      POST_COMMANDS_SUCCESS: >-
+        /notify.bash
+        --subject "The s3 backup job was executed successfully"
+        --body "The s3 backup job was executed successfully"
+        || true
+      # Commands will be executed after a failed backup run.
+      POST_COMMANDS_FAILURE: >-
+        /notify.bash
+        --subject "The s3 backup job has encountered problems"
+        --body "The s3 backup job has encountered problems"
+        || true
+      # Commands will be executed if the backup is incomplete.
+      POST_COMMANDS_INCOMPLETE: >-
+        /notify.bash
+        --subject "The s3 backup job is incomplete"
+        --body "The s3 backup job is incomplete"
+        || true
+
+    # https://docs.docker.com/storage/volumes/
+    # Mount docker volumes. This is the directory that gets uodated.
+    volumes:
+      - /var/lib/docker/volumes:/mnt/volumes:ro
