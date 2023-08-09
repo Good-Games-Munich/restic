@@ -2,9 +2,10 @@
 version: "3.8"
 services:
   restic:
-    # Build using a Dockerfile
+    # Build using a Dockerfile in context
+    # https://docs.docker.com/compose/compose-file/build/#context
     build:
-      dockerfile: Dockerfile
+      context: .
 
     # https://www.baeldung.com/ops/docker-compose-restart-policies
     restart: always
