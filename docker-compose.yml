@@ -16,7 +16,7 @@ services:
       # A cron expression for when to run the backup
       BACKUP_CRON: 0 30 3 * * *
       # Set to "true" to execute a backup or prune job right on startup, in addition to the given cron expression.
-      RUN_ON_STARTUP: 1
+      RUN_ON_STARTUP: 'true' # Has to be literall string 'true' otherwise it will ignore it for reasons
       # Location of the restic repository. You can use any target supported by restic. https://restic.readthedocs.io/en/stable/030_preparing_a_new_repo.html
       RESTIC_REPOSITORY: ${RESTIC_REPOSITORY:?Missing environment variable see readme}
       # Password for the restic repository.
