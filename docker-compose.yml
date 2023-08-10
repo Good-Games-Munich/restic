@@ -45,8 +45,6 @@ services:
       NOTIFY_FROM: ${NOTIFY_FROM:?Missing environment variable see readme}
       # Server where to login for notify.
       NOTIFY_SERVER: ${NOTIFY_SERVER:?Missing environment variable see readme}
-      # Server port to login for notify.
-      NOTIFY_PORT: ${NOTIFY_PORT:?Missing environment variable see readme}
       # Server user to login for notify.
       NOTIFY_USER: ${NOTIFY_USER:?Missing environment variable see readme}
       # Server password to login for notify.
