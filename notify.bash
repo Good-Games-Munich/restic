@@ -24,7 +24,6 @@ swaks --to "$NOTIFY_TO" \
     --header "Subject: $SUBJECT" \
     --body "$BODY" \
     --server "$NOTIFY_SERVER" \
-    --port "$NOTIFY_PORT" \
     --auth LOGIN \
     --auth-user "$NOTIFY_USER" \
     --auth-password "$NOTIFY_PASSWORD" \
