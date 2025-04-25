@@ -1,6 +1,6 @@
 # https://hub.docker.com/r/mazzolino/restic/
 # https://hub.docker.com/r/mazzolino/restic/tags
-FROM mazzolino/restic:1.7
+FROM mazzolino/restic:1.8
 
 # Add dependecies for email notification script
 RUN apk add --no-cache perl-net-ssleay perl-net-dns swaks --repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing/
