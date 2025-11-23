@@ -1,74 +1,107 @@
 # This file serves as the base to build on top on.
 version: "3.8"
+
 services:
-  restic:
-    # Build using a Dockerfile in context
-    # https://docs.docker.com/compose/compose-file/build/#context
-    build:
-      context: .
-
+  restic-backup:
+    # https://hub.docker.com/r/mazzolino/restic/
+    # https://hub.docker.com/r/mazzolino/restic/tags
+    image: mazzolino/restic:1.8
     # https://www.baeldung.com/ops/docker-compose-restart-policies
-    restart: always
-
-    # https://docs.docker.com/storage/volumes/
-    # https://github.com/djmaze/resticker/#configuration-options
+    restart: unless-stopped
     environment:
-      # A cron expression for when to run the backup
-      BACKUP_CRON: 0 30 3 * * *
-      # Set to "true" to execute a backup or prune job right on startup, in addition to the given cron expression.
-      RUN_ON_STARTUP: 'true' # Has to be literall string 'true' otherwise it will ignore it for reasons
-      # Location of the restic repository. You can use any target supported by restic. https://restic.readthedocs.io/en/stable/030_preparing_a_new_repo.html
-      RESTIC_REPOSITORY: ${RESTIC_REPOSITORY:?Missing environment variable see readme}
-      # Password for the restic repository.
-      RESTIC_PASSWORD: ${RESTIC_PASSWORD:?Missing environment variable see readme}
       # https://restic.readthedocs.io/en/stable/030_preparing_a_new_repo.html#amazon-s3
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:?Missing environment variable see readme}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:?Missing environment variable see readme}
+      # A cron expression for when to run the backup
+      BACKUP_CRON: ${RESTIC_BACKUP_CRON-0 0 5 * * *}
+      # Commands will be executed on exit.
+      POST_COMMANDS_EXIT: if [ -n "$$STOPPED_CONTAINERS" ]; then docker start $$STOPPED_CONTAINERS; fi
+      # Commands will be executed after a failed backup run.
+      POST_COMMANDS_FAILURE: curl -fsS -m 10 --retry 3 -X POST "${HEALTHCHECKS_URL_BACKUP_FAIL:-}?rid=$$RID" || true
+      # Commands will be executed if the backup is incomplete.
+      POST_COMMANDS_INCOMPLETE: curl -fsS -m 10 --retry 3 -X POST "${HEALTHCHECKS_URL_BACKUP_INCOMPLETE:-}?rid=$$RID" || true
+      # Commands will be executed after a fully successful backup run.
+      POST_COMMANDS_SUCCESS: curl -fsS -m 10 --retry 3 -X POST "${HEALTHCHECKS_URL_BACKUP_SUCCESS:-}?rid=$$RID" || true
+      # Commands will be executed before the backup run.
+      PRE_COMMANDS: |-
+        export RID=$$(cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen 2>/dev/null || echo "")
+        curl -fsS -m 10 --retry 3 -X POST "${HEALTHCHECKS_URL_BACKUP_START:-}?rid=$$RID" || true
+        export STOPPED_CONTAINERS=$$(docker ps --filter "status=running" --format "{{.ID}} {{.Names}}" | grep -vE "restic" | awk '{print $$1}' | tr '\n' ' ' || echo "")
+        if [ -n "$$STOPPED_CONTAINERS" ]; then docker stop $$STOPPED_CONTAINERS > /dev/null 2>&1 || true; fi
+      # Restic backup is run with the given arguments.
+      RESTIC_BACKUP_ARGS: >-
+        --tag ${RESTIC_BACKUP_TAG-docker-volumes}
+        --host ${RESTIC_BACKUP_HOST:?Missing environment variable see readme}
+        --exclude *.tmp
+        --verbose
       # Source directory to backup.
       RESTIC_BACKUP_SOURCES: /mnt/volumes
-      # If specified restic backup is run with the given arguments.
-      RESTIC_BACKUP_ARGS: >-
-        --tag docker-volumes
-        --host docker
-        --verbose
-      # If specified restic forget is run with the given arguments after each backup or before every prune.
+      # Restic forget is run with the given arguments after each backup.
       RESTIC_FORGET_ARGS: >-
-        --keep-last 30
-        --keep-daily 7
-        --keep-weekly 5
-        --keep-monthly 12
+        --keep-last ${RESTIC_KEEP_LAST-30}
+        --keep-daily ${RESTIC_KEEP_DAILY-7}
+        --keep-weekly ${RESTIC_KEEP_WEEKLY-5}
+        --keep-monthly ${RESTIC_KEEP_MONTHLY-12}
+      # Password for the restic repository.
+      RESTIC_PASSWORD: ${RESTIC_PASSWORD:?Missing environment variable see readme}
+      # Location of the restic repository. You can use any target supported by restic. https://restic.readthedocs.io/en/stable/030_preparing_a_new_repo.html
+      RESTIC_REPOSITORY: ${RESTIC_REPOSITORY:?Missing environment variable see readme}
+      # Set to "true" to execute a backup or prune job right on startup, in addition to the given cron expression.
+      RUN_ON_STARTUP: "true"
       # Set your timezone for the correct cron execution time.
-      TZ: Europe/Berlin
-      # Email to send the notification to.
-      NOTIFY_TO: ${NOTIFY_TO:?Missing environment variable see readme}
-      # Email from which the notification is sent.
-      NOTIFY_FROM: ${NOTIFY_FROM:?Missing environment variable see readme}
-      # Server where to login for notify.
-      NOTIFY_SERVER: ${NOTIFY_SERVER:?Missing environment variable see readme}
-      # Server user to login for notify.
-      NOTIFY_USER: ${NOTIFY_USER:?Missing environment variable see readme}
-      # Server password to login for notify.
-      NOTIFY_PASSWORD: ${NOTIFY_PASSWORD:?Missing environment variable see readme}
-      # Commands will be executed after a fully successful backup run.
-      POST_COMMANDS_SUCCESS: >-
-        /notify.bash
-        --subject "The s3 backup job was executed successfully"
-        --body "The s3 backup job was executed successfully"
-        || true
-      # Commands will be executed after a failed backup run.
-      POST_COMMANDS_FAILURE: >-
-        /notify.bash
-        --subject "The s3 backup job has encountered problems"
-        --body "The s3 backup job has encountered problems"
-        || true
-      # Commands will be executed if the backup is incomplete.
-      POST_COMMANDS_INCOMPLETE: >-
-        /notify.bash
-        --subject "The s3 backup job is incomplete"
-        --body "The s3 backup job is incomplete"
-        || true
-
+      TZ: ${RESTIC_TZ-Europe/Berlin}
     # https://docs.docker.com/storage/volumes/
-    # Mount docker volumes. This is the directory that gets uodated.
     volumes:
       - /var/lib/docker/volumes:/mnt/volumes:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  restic-prune:
+    image: mazzolino/restic:1.8
+    restart: unless-stopped
+    # https://docs.docker.com/reference/compose-file/services/#profiles
+    profiles:
+      - prune
+    environment:
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:?Missing environment variable see readme}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:?Missing environment variable see readme}
+      POST_COMMANDS_FAILURE: curl -fsS -m 10 --retry 3 -X POST "${HEALTHCHECKS_URL_PRUNE_FAIL:-}?rid=$$RID" || true
+      POST_COMMANDS_SUCCESS: curl -fsS -m 10 --retry 3 -X POST "${HEALTHCHECKS_URL_PRUNE_SUCCESS:-}?rid=$$RID" || true
+      PRE_COMMANDS: |-
+        export RID=$$(cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen 2>/dev/null || echo "")
+        curl -fsS -m 10 --retry 3 -X POST "${HEALTHCHECKS_URL_PRUNE_START:-}?rid=$$RID" || true
+      # A cron expression for when to run the prune.
+      PRUNE_CRON: ${RESTIC_PRUNE_CRON-0 0 6 * * *}
+      RESTIC_PASSWORD: ${RESTIC_PASSWORD:?Missing environment variable see readme}
+      RESTIC_REPOSITORY: ${RESTIC_REPOSITORY:?Missing environment variable see readme}
+      # Set to "true" to execute a backup or prune job right on startup, in addition to the given cron expression.
+      RUN_ON_STARTUP: "false"
+      # Skip repository initialization check.
+      SKIP_INIT: "true"
+      TZ: ${RESTIC_TZ-Europe/Berlin}
+
+  restic-check:
+    image: mazzolino/restic:1.8
+    restart: unless-stopped
+    # https://docs.docker.com/reference/compose-file/services/#profiles
+    profiles:
+      - check
+    environment:
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:?Missing environment variable see readme}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:?Missing environment variable see readme}
+      # A cron expression for when to run the check.
+      CHECK_CRON: ${RESTIC_CHECK_CRON-0 0 7 * * *}
+      POST_COMMANDS_FAILURE: curl -fsS -m 10 --retry 3 -X POST "${HEALTHCHECKS_URL_CHECK_FAIL:-}?rid=$$RID" || true
+      POST_COMMANDS_SUCCESS: curl -fsS -m 10 --retry 3 -X POST "${HEALTHCHECKS_URL_CHECK_SUCCESS:-}?rid=$$RID" || true
+      PRE_COMMANDS: |-
+        export RID=$$(cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen 2>/dev/null || echo "")
+        curl -fsS -m 10 --retry 3 -X POST "${HEALTHCHECKS_URL_CHECK_START:-}?rid=$$RID" || true
+      # Restic check is run with the given arguments.
+      RESTIC_CHECK_ARGS: >-
+        --read-data-subset=10%
+      RESTIC_PASSWORD: ${RESTIC_PASSWORD:?Missing environment variable see readme}
+      RESTIC_REPOSITORY: ${RESTIC_REPOSITORY:?Missing environment variable see readme}
+      # Set to "true" to execute a backup or prune job right on startup, in addition to the given cron expression.
+      RUN_ON_STARTUP: "false"
+      # Skip repository initialization check.
+      SKIP_INIT: "true"
+      TZ: ${RESTIC_TZ-Europe/Berlin}
