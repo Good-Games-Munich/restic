@@ -27,7 +27,7 @@
 
 ## About The Project
 
-Setup for restic backup solution fo s3.
+Setup for restic docker volume backup solution fo s3.
 
 ## Setup
 
@@ -38,23 +38,91 @@ Follow [Creating a release](https://github.com/Good-Games-Munich/.github/wiki/wo
 ### Development
 
 1. Follow [local setup](https://github.com/Good-Games-Munich/.github/wiki/workflows#local-setup).
-2. Follow the [Customization](#customization) section and set all variables with `Required in dev` `true`.
+2. Follow the [Customization](#customization) section and set all variables with `Required` set to `true`.
 
 ### Customization
 
 Create a environment file `touch .env`. Override variables in the `{variable name}={variable value}` format. All required variables need to be overridden for the respected environment.
 
-| Variable                | Description                                                                                                                                                                             | Required in dev | Required in prod | Default value |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- | ---------------- | ------------- |
-| `RESTIC_REPOSITORY`     | Location of the restic repository. You can use any target supported by restic. See [Preparing a new repository](https://restic.readthedocs.io/en/stable/030_preparing_a_new_repo.html). | `true`          | `true`           | none          |
-| `RESTIC_PASSWORD`       | Password for the restic repository.                                                                                                                                                     | `true`          | `true`           | none          |
-| `AWS_ACCESS_KEY_ID`     | See [Restic amazon s3](https://restic.readthedocs.io/en/stable/030_preparing_a_new_repo.html#amazon-s3).                                                                                | `true`          | `true`           | none          |
-| `AWS_SECRET_ACCESS_KEY` | See [Restic amazon s3](https://restic.readthedocs.io/en/stable/030_preparing_a_new_repo.html#amazon-s3).                                                                                | `true`          | `true`           | none          |
-| `NOTIFY_TO`             | Email to send the notification to.                                                                                                                                                      | `true`          | `true`           | none          |
-| `NOTIFY_FROM`           | Email from which the notification is sent.                                                                                                                                              | `true`          | `true`           | none          |
-| `NOTIFY_SERVER`         | SMTP server.                                                                                                                                                                            | `true`          | `true`           | none          |
-| `NOTIFY_USER`           | SMTP user.                                                                                                                                                                              | `true`          | `true`           | none          |
-| `NOTIFY_PASSWORD`       | SMTP password.                                                                                                                                                                          | `true`          | `true`           | none          |
+| Variable                             | Description                                                                                     | Default value    | Required |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------- | ---------------- | -------- |
+| `AWS_ACCESS_KEY_ID`                  | AWS access key ID for S3 repository access                                                      | none             | true     |
+| `AWS_SECRET_ACCESS_KEY`              | AWS secret access key for S3 repository access                                                  | none             | true     |
+| `HEALTHCHECKS_URL_BACKUP_START`      | Monitoring URL for backup start signal                                                          | none             | false    |
+| `HEALTHCHECKS_URL_BACKUP_SUCCESS`    | Monitoring URL for backup success signal                                                        | none             | false    |
+| `HEALTHCHECKS_URL_BACKUP_FAIL`       | Monitoring URL for backup failure signal                                                        | none             | false    |
+| `HEALTHCHECKS_URL_BACKUP_INCOMPLETE` | Monitoring URL for backup incomplete signal                                                     | none             | false    |
+| `HEALTHCHECKS_URL_PRUNE_START`       | Monitoring URL for prune start signal                                                           | none             | false    |
+| `HEALTHCHECKS_URL_PRUNE_SUCCESS`     | Monitoring URL for prune success signal                                                         | none             | false    |
+| `HEALTHCHECKS_URL_PRUNE_FAIL`        | Monitoring URL for prune failure signal                                                         | none             | false    |
+| `HEALTHCHECKS_URL_CHECK_START`       | Monitoring URL for check start signal                                                           | none             | false    |
+| `HEALTHCHECKS_URL_CHECK_SUCCESS`     | Monitoring URL for check success signal                                                         | none             | false    |
+| `HEALTHCHECKS_URL_CHECK_FAIL`        | Monitoring URL for check failure signal                                                         | none             | false    |
+| `RESTIC_BACKUP_CRON`                 | GoCron schedule to run backup                                                                   | `0 0 5 * * *`    | false    |
+| `RESTIC_BACKUP_HOST`                 | Host name identifier for backups                                                                | none             | true     |
+| `RESTIC_BACKUP_TAG`                  | Tag for backup snapshots                                                                        | `docker-volumes` | false    |
+| `RESTIC_CHECK_CRON`                  | GoCron schedule to run repository check                                                         | `0 0 7 * * *`    | false    |
+| `RESTIC_KEEP_DAILY`                  | For the last `n` days which have one or more snapshots, only keep the last one for that day     | `7`              | false    |
+| `RESTIC_KEEP_LAST`                   | Never delete the `n` last (most recent) snapshots                                               | `30`             | false    |
+| `RESTIC_KEEP_MONTHLY`                | For the last `n` months which have one or more snapshots, only keep the last one for that month | `12`             | false    |
+| `RESTIC_KEEP_WEEKLY`                 | For the last `n` weeks which have one or more snapshots, only keep the last one for that week   | `5`              | false    |
+| `RESTIC_PASSWORD`                    | Password for restic repository                                                                  | none             | true     |
+| `RESTIC_PRUNE_CRON`                  | GoCron schedule to run repository prune                                                         | `0 0 6 * * *`    | false    |
+| `RESTIC_REPOSITORY`                  | Repository location (see [Restic Docs](https://restic.readthedocs.io/))                         | none             | true     |
+| `RESTIC_TZ`                          | Timezone for cron schedules                                                                     | `Europe/Berlin`  | false    |
+
+### Monitoring Integration Example
+
+You can integrate monitoring services to track your backup, prune, and check operations using the UUID pattern.
+
+**Example `.env` configuration:**
+
+```bash
+# Backup monitoring (using UUID pattern)
+HEALTHCHECKS_URL_BACKUP_START=https://hc-ping.com/<uuid>/start
+HEALTHCHECKS_URL_BACKUP_SUCCESS=https://hc-ping.com/<uuid>
+HEALTHCHECKS_URL_BACKUP_FAIL=https://hc-ping.com/<uuid>/fail
+HEALTHCHECKS_URL_BACKUP_INCOMPLETE=https://hc-ping.com/<uuid>/fail
+
+# Prune monitoring (using UUID pattern)
+HEALTHCHECKS_URL_PRUNE_START=https://hc-ping.com/<uuid>/start
+HEALTHCHECKS_URL_PRUNE_SUCCESS=https://hc-ping.com/<uuid>
+HEALTHCHECKS_URL_PRUNE_FAIL=https://hc-ping.com/<uuid>/fail
+
+# Check monitoring (using UUID pattern)
+HEALTHCHECKS_URL_CHECK_START=https://hc-ping.com/<uuid>/start
+HEALTHCHECKS_URL_CHECK_SUCCESS=https://hc-ping.com/<uuid>
+HEALTHCHECKS_URL_CHECK_FAIL=https://hc-ping.com/<uuid>/fail
+```
+
+The script automatically includes a run ID (`rid`) parameter in all ping requests to enable accurate duration tracking.
+
+**Note:** If a monitoring URL variable is not set, the corresponding ping request will be skipped silently and the operation will continue normally.
+
+### Single Host vs Multi-Host Configuration
+
+**Single Host Setup:**
+
+On a single host, all services (`restic-backup`, `restic-prune`, and `restic-check`) should **always run**. Simply add `COMPOSE_PROFILES=prune,check` to your `.env` file to enable all services.
+
+**Multi-Host Setup:**
+
+When backing up multiple hosts to the same restic repository, Docker Compose profiles can be used to control which host runs which maintenance operations. **Not all hosts need to run prune and check** - you can designate specific hosts for specific tasks.
+
+**Example multi-host setup:**
+
+- **Host 1 (Primary):** All services enabled (`COMPOSE_PROFILES=prune,check`)
+  - Backup at 3:30 AM, Prune at 4:00 AM, Check at 5:15 AM
+- **Host 2 (Secondary):** Only backup enabled (no profiles)
+  - Backup at 4:00 AM
+
+This allows you to:
+
+- **Distribute load:** Run maintenance operations on dedicated hosts
+- **Avoid conflicts:** Prevent simultaneous prune/check operations from multiple hosts
+- **Optimize resources:** Only run maintenance where needed
+
+Configure the cron schedules (`RESTIC_BACKUP_CRON`, `RESTIC_PRUNE_CRON`, `RESTIC_CHECK_CRON`) appropriately for each host based on their assigned roles.
 
 <!-- CONTRIBUTING -->
 

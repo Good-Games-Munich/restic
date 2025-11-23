@@ -2,6 +2,12 @@
 # This file gets applied automatically when no --file parameter is provided
 version: "3.8"
 services:
-  restic:
+  restic-backup:
     # Add a name to easy identify
-    container_name: resticDev
+    container_name: resticBackupDev-${RESTIC_BACKUP_HOST}
+
+  restic-prune:
+    container_name: resticPruneDev-${RESTIC_BACKUP_HOST}
+
+  restic-check:
+    container_name: resticCheckDev-${RESTIC_BACKUP_HOST}

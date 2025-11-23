@@ -1,6 +1,12 @@
 # This file extends the docker-compose.yml with production configurations/overrides. https://docs.docker.com/compose/compose-file/13-merge/
 version: "3.8"
 services:
-  restic:
+  restic-backup:
     # Add a name to easy identify
-    container_name: resticProd
+    container_name: resticBackupProd-${RESTIC_BACKUP_HOST}
+
+  restic-prune:
+    container_name: resticPruneProd-${RESTIC_BACKUP_HOST}
+
+  restic-check:
+    container_name: resticCheckProd-${RESTIC_BACKUP_HOST}
